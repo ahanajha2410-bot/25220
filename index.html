@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MDR Smart Contact Tracing — Full Prototype</title>
+
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- vis-network for interactive contact graph -->
+  <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <link href="https://unpkg.com/vis-network@9.1.2/styles/vis-network.min.css" rel="stylesheet" />
+  <!-- jsPDF + html2canvas for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f3f4f6; --card:#ffffff; --muted:#6b7280; --accent:#2563eb; --danger:#ef4444;
+    }
+    *{box-sizing:border-box; font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    body{margin:0; background:var(--bg); color:#0f172a; padding:18px;}
+    header{display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px;}
+    h1{margin:0;font-size:20px;}
+    .controls{display:flex; gap:8px; align-items:center;}
+    input, select{padding:8px 10px;border-radius:8px;border:1px solid #d1d5db;}
+    button{background:var(--accent); color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer;}
+    button.ghost{background:white; color:var(--accent); border:1px solid #c7d2fe;}
+    .layout{display:grid; grid-template-columns:320px 1fr; gap:16px;}
+    .card{background:var(--card); border-radius:10px; padding:12px; box-shadow:0 1px 6px rgba(2,6,23,0.06);}
+    .small{font-size:13px;color:var(--muted);}
+    .alerts{display:flex; flex-direction:column; gap:8px;}
+    .alert{padding:10px;border-radius:8px;background:#fff6f6;border:1px solid #fee2e2;color:var(--danger);display:flex;justify-content:space-between;align-items:center;}
+    table{width:100%; border-collapse:collapse;}
+    th,td{padding:8px;border-bottom:1px solid #eef2f7; text-align:left; font-size:13px;}
+    th{color:var(--muted); font-weight:600;}
+    .row-actions button{margin-right:6px;padding:6px 8px;font-size:12px;}
+    #network{height:380px;border-radius:8px;background:white;border:1px solid #e6edf6;}
+    .charts{display:flex; gap:12px; margin-bottom:12px;}
+    .chart-card{flex:1; padding:10px;}
+    .timeline{max-height:220px; overflow:auto;}
+    .chip{display:inline-block;padding:6px 8px;border-radius:999px;background:#eef2ff;color:#1e3a8a;font-weight:600;font-size:12px;margin-right:6px;}
+    .flex{display:flex;align-items:center}
+    .between{display:flex;justify-content:space-between;align-items:center}
+    footer{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
+    /* responsive */
+    @media (max-width:900px){ .layout{grid-template-columns:1fr; } #network{height:260px;} .charts{flex-direction:column;} .card{padding:10px;} }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>MDR Smart Contact Tracing — Prototype</h1>
+      <div class="small">Interactive demo — <strong>Senu</strong>, features 1–10 enabled.</div>
+    </div>
+
+    <div class="controls">
+      <input id="search" placeholder="Search name / id..." oninput="applyFilters()" />
+      <select id="filterRisk" onchange="applyFilters()">
+        <option value="all">All risks</option>
+        <option value="high">High (>=70)</option>
+        <option value="moderate">Moderate (40–69)</option>
+        <option value="low">Low (&lt;40)</option>
+      </select>
+      <select id="filterTest" onchange="applyFilters()">
+        <option value="any">Any test</option>
+        <option value="positive">Positive</option>
+        <option value="negative">Negative</option>
+        <option value="na">N/A</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="doctorMode" onchange="renderUI()" /> Doctor mode
+      </label>
+      <button onclick="exportCSV()">Export CSV</button>
+      <button onclick="exportPDF()">Export PDF</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Left column -->
+    <section>
+      <div class="card alerts">
+        <div class="between">
+          <div><strong>Alerts</strong> <span class="small">(auto-generated)</span></div>
+          <div id="outbreakTag" class="chip" style="display:none;background:#fff1f2;color:#991b1b">Possible Outbreak</div>
+        </div>
+        <div id="alertsContainer" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="between"><strong>Quick Actions</strong><span class="small">one-click</span></div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+          <button onclick="notifyAll()">Notify Contacts of Positive Case</button>
+          <button onclick="queueHighRisk()">Queue High-Risk Patients for MDR Panel</button>
+          <button onclick="exportGraphPNG()">Export Network (PNG)</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <strong>AI Risk Insight</strong>
+        <div id="aiInsight" class="small" style="margin-top:8px">No risk scan yet — click "Run Full Scan".</div>
+
+        <div style="margin-top:10px">
+          <button class="ghost" onclick="runScan()">Run Full Scan</button>
+          <button style="margin-left:8px" onclick="autoPopupToggle()">Toggle Auto Alert Popups</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <strong>Contact Timeline</strong>
+        <div class="timeline small" id="timelineContainer" style="margin-top:8px;">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Right column -->
+    <section>
+      <div class="card" style="margin-bottom:12px">
+        <div class="between">
+          <strong>Interactive Contact Network</strong>
+          <div class="small">Edge width = duration (min). Click a node for details.</div>
+        </div>
+        <div id="network"></div>
+      </div>
+
+      <div class="card charts" style="align-items:stretch;">
+        <div class="chart-card">
+          <strong>Risk Distribution</strong>
+          <canvas id="pieRisk" style="max-height:180px"></canvas>
+        </div>
+        <div class="chart-card">
+          <strong>Patients by Risk Level</strong>
+          <canvas id="barRisk" style="max-height:180px"></canvas>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="between">
+          <strong>Patient Table</strong>
+          <div class="small">Use search/filters or click a node.</div>
+        </div>
+        <div style="overflow:auto; margin-top:10px;">
+          <table id="patientTable">
+            <thead>
+              <tr id="theadRow">
+                <th>ID</th><th>Name</th><th>Age</th><th>Symptoms</th><th>Risk</th><th>Test</th><th>Contacts</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <footer>Prototype — not for clinical use. Heuristic scoring only.</footer>
+
+  <!-- Modal / popup -->
+  <div id="modal" style="display:none; position:fixed; inset:0; background:rgba(2,6,23,0.45); align-items:center; justify-content:center;">
+    <div style="background:white; padding:16px; border-radius:10px; width:420px; max-width:94%;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong id="modalTitle">Alert</strong>
+        <button onclick="closeModal()" style="background:#ef4444;">Close</button>
+      </div>
+      <div id="modalBody" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+<script>
+/* -----------------------
+   MOCK DATA (timestamps included)
+   ----------------------- */
+const patients = [
+  { id:"P-1001", name:"Ravi Kumar", age:62, comorbidities:["diabetes"], symptoms:["fever","cough"], contacts:[
+      {id:"P-1002", start:"2025-10-10T09:15:00", durationMin:25},
+      {id:"P-1003", start:"2025-10-09T14:10:00", durationMin:5}
+    ], lastTest:{date:"2025-10-10", result:"negative"}
+  },
+  { id:"P-1002", name:"Anjali S.", age:29, comorbidities:[], symptoms:["sore throat"], contacts:[
+      {id:"P-1001", start:"2025-10-10T09:15:00", durationMin:25},
+      {id:"P-1004", start:"2025-10-08T11:00:00", durationMin:120}
+    ], lastTest:{date:"2025-10-09", result:"positive"}
+  },
+  { id:"P-1003", name:"Ramesh T.", age:45, comorbidities:["hypertension"], symptoms:[], contacts:[
+      {id:"P-1001", start:"2025-10-09T14:10:00", durationMin:5}
+    ], lastTest:{date:"2025-09-30", result:"negative"}
+  },
+  { id:"P-1004", name:"Lab Equipment 7", age:null, comorbidities:[], symptoms:[], contacts:[
+      {id:"P-1002", start:"2025-10-08T11:00:00", durationMin:120}
+    ], lastTest:{date:null, result:"N/A"}
+  },
+  // Add another positive close to create outbreak scenario:
+  { id:"P-1005", name:"Seema V.", age:70, comorbidities:["COPD"], symptoms:["shortness of breath"], contacts:[
+      {id:"P-1002", start:"2025-10-09T10:00:00", durationMin:40}
+    ], lastTest:{date:"2025-10-11", result:"positive"}
+  }
+];
+
+/* -----------------------
+   RISK SCORING (prototype heuristic)
+   - symptomScore: weighted by symptom severity
+   - comorbidity factor: +2 per comorbidity
+   - age factor: >60 multiply
+   - exposureScore: counts contacts with positives weighted by duration
+   Map to 0-100
+   ----------------------- */
+function symptomScore(symptoms){
+  const weights = { fever:3, cough:2, "shortness of breath":4, "sore throat":1, fatigue:1 };
+  return (symptoms||[]).reduce((s,x)=> s + (weights[x]||1), 0);
+}
+function comorbidityScore(com){
+  return (com||[]).length * 2;
+}
+function exposureScore(p){
+  let score=0;
+  for(const c of (p.contacts||[])){
+    const partner = patients.find(q=>q.id===c.id);
+    const durationFactor = Math.min(120, c.durationMin)/120; // 0..1
+    const partnerPositive = partner && partner.lastTest && partner.lastTest.result==="positive";
+    score += durationFactor * (partnerPositive ? 6 : 1);
+  }
+  return score;
+}
+function computeRisk(p){
+  const s = symptomScore(p.symptoms);
+  const c = comorbidityScore(p.comorbidities);
+  const e = exposureScore(p);
+  const ageFactor = (p.age && p.age>60) ? 1.6 : 1;
+  const raw = (s*3 + c*2 + e*5) * ageFactor;
+  const risk = Math.min(100, Math.round((raw / 30) * 100));
+  return risk;
+}
+
+/* -----------------------
+   UI state & helpers
+   ----------------------- */
+let autoPopup = true;
+
+function runScan(){
+  // compute risk for all users and update UI
+  for(const p of patients) p.risk = computeRisk(p);
+  renderAll();
+  generateAIInsight();
+  if(autoPopup) generateAlertPopups();
+}
+
+function applyFilters(){
+  renderTable();
+  renderAlerts();
+  renderCharts();
+}
+
+function renderAll(){
+  renderNetwork();
+  renderTable();
+  renderAlerts();
+  renderCharts();
+  renderTimeline();
+}
+
+/* -----------------------
+   Alerts & Outbreak detection
+   - outbreak: 2+ positives connected via contact edges
+   ----------------------- */
+function renderAlerts(){
+  const container = document.getElementById('alertsContainer');
+  container.innerHTML = '';
+  const risky = patients.filter(p=> (p.risk>=60) || (p.lastTest && p.lastTest.result==="positive"));
+  risky.sort((a,b)=>b.risk-a.risk);
+  for(const p of risky){
+    const div = document.createElement('div');
+    div.className='alert';
+    div.innerHTML = `<div>
+        <div style="font-weight:700">${p.name} <span style="font-weight:600;color:#374151;font-size:12px">(${p.id})</span></div>
+        <div style="font-size:12px;color:#374151;margin-top:4px">Risk: <strong>${p.risk}%</strong> · Test: ${p.lastTest?.result || 'N/A'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button onclick='flagTest("${p.id}")' style="background:#10b981;padding:6px 8px;border-radius:6px">Flag for MDR Test</button>
+        <button onclick='showDetails("${p.id}")' style="background:#3b82f6;padding:6px 8px;border-radius:6px">Details</button>
+      </div>`;
+    container.appendChild(div);
+  }
+
+  // outbreak detection
+  const positives = patients.filter(p=>p.lastTest && p.lastTest.result==="positive");
+  let outbreak=false;
+  if(positives.length>=2){
+    // if any positive shares contact with another positive within contacts graph
+    for(const pos of positives){
+      for(const c of (pos.contacts||[])){
+        const partner = patients.find(p=>p.id===c.id);
+        if(partner && partner.lastTest && partner.lastTest.result==="positive"){
+          outbreak = true;
+        }
+      }
+    }
+  }
+  document.getElementById('outbreakTag').style.display = outbreak ? 'inline-block' : 'none';
+}
+
+function generateAlertPopups(){
+  const urgent = patients.find(p=>p.risk>=80 || (p.lastTest&&p.lastTest.result==="positive"));
+  if(urgent){
+    showModal(`Immediate alert: ${urgent.name} (${urgent.id}) has risk ${urgent.risk}% and test ${urgent.lastTest.result}. Suggest: Queue for MDR testing & isolate contact areas.`);
+  }
+}
+
+function autoPopupToggle(){
+  autoPopup = !autoPopup;
+  alert('Auto alert popups ' + (autoPopup ? 'ENABLED' : 'DISABLED'));
+}
+
+/* -----------------------
+   AI Insight (simple textual summary)
+   ----------------------- */
+function generateAIInsight(){
+  const highest = [...patients].sort((a,b)=>b.risk-a.risk)[0];
+  const positives = patients.filter(p=>p.lastTest && p.lastTest.result==='positive');
+  const lines = [];
+  lines.push(`Top-risk patient: ${highest.name} (${highest.id}) — Risk ${highest.risk}%.`);
+  if(highest.symptoms && highest.symptoms.length) lines.push(`Symptoms: ${highest.symptoms.join(', ')}.`);
+  if(highest.comorbidities && highest.comorbidities.length) lines.push(`Comorbidities: ${highest.comorbidities.join(', ')}.`);
+  if(positives.length) lines.push(`Detected ${positives.length} positive case(s). Recommend immediate contact notifications.`);
+  document.getElementById('aiInsight').innerText = lines.join(' ');
+}
+
+/* -----------------------
+   Timeline UI
+   ----------------------- */
+function renderTimeline(){
+  const el = document.getElementById('timelineContainer');
+  const events = [];
+  for(const p of patients){
+    for(const c of (p.contacts||[])){
+      events.push({ who:p.name, with:c.id, start:c.start, duration:c.durationMin });
+    }
+  }
+  events.sort((a,b)=> new Date(b.start) - new Date(a.start));
+  el.innerHTML = '';
+  for(const e of events.slice(0,40)){
+    const d = new Date(e.start);
+    const row = document.createElement('div');
+    row.style.padding='8px'; row.style.borderBottom='1px solid #f1f5f9';
+    row.innerHTML = `<div style="font-weight:600">${e.who}</div>
+      <div class="small">${d.toLocaleString()} — contact with <strong>${e.with}</strong> for ${e.duration} min</div>`;
+    el.appendChild(row);
+  }
+}
+
+/* -----------------------
+   Table rendering & actions
+   ----------------------- */
+function renderTable(){
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  const q = document.getElementById('search').value.toLowerCase();
+  const riskFilter = document.getElementById('filterRisk').value;
+  const testFilter = document.getElementById('filterTest').value;
+  const doctorMode = document.getElementById('doctorMode').checked;
+
+  for(const p of patients){
+    // filtering
+    if(q && !(`${p.name} ${p.id}`.toLowerCase().includes(q))) continue;
+    if(riskFilter==='high' && p.risk<70) continue;
+    if(riskFilter==='moderate' && (p.risk<40 || p.risk>=70)) continue;
+    if(riskFilter==='low' && p.risk>=40) continue;
+    if(testFilter==='positive' && p.lastTest?.result!=='positive') continue;
+    if(testFilter==='negative' && p.lastTest?.result!=='negative') continue;
+    if(testFilter==='na' && p.lastTest?.result!=='N/A') continue;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.id}</td>
+      <td>${p.name}${doctorMode ? `<div style="font-size:12px;color:#6b7280">${p.comorbidities?.join(', ')||''}</div>` : ''}</td>
+      <td>${p.age||'—'}</td>
+      <td>${(p.symptoms||[]).join(', ') || '—'}</td>
+      <td><strong>${p.risk}%</strong></td>
+      <td>${p.lastTest?.result || 'N/A'}</td>
+      <td>${(p.contacts||[]).map(c=>c.id).join(', ') || '—'}</td>
+      <td class="row-actions">
+        <button onclick='showDetails("${p.id}")'>View</button>
+        <button onclick='notifyContact("${p.id}")'>Notify</button>
+        <button onclick='flagTest("${p.id}")'>Queue Test</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+/* -----------------------
+   Network Graph (vis-network)
+   ----------------------- */
+let network = null;
+function renderNetwork(){
+  // nodes from patients
+  const nodes = patients.map(p=>({ id:p.id, label:`${p.name}\n${p.id}`, title:`Risk: ${p.risk}%`, value: Math.max(1,p.risk) }));
+  // edges from contacts, width scaled by duration
+  const edges = [];
+  const edgeSet = new Set();
+  for(const p of patients){
+    for(const c of (p.contacts||[])){
+      const key = [p.id, c.id].sort().join('--');
+      // accumulate duration for undirected edge
+      if(!edgeSet.has(key)){
+        const duration = c.durationMin || 1;
+        edges.push({ from:p.id, to:c.id, width: Math.min(8, 1 + duration/30), title:`${duration} min`, value:duration });
+        edgeSet.add(key);
+      }
+    }
+  }
+
+  const container = document.getElementById('network');
+  const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+  const options = {
+    nodes: { shape: 'dot', size: 18, font:{multi:true}},
+    edges: { smooth:false, color:{inherit:true}},
+    physics: { stabilization: true, barnesHut: { gravitationalConstant: -8000, springLength: 250 } },
+    interaction: { hover:true, multiselect:true }
+  };
+  if(network) network.destroy();
+  network = new vis.Network(container, data, options);
+
+  network.on("click", function(params){
+    if(params.nodes && params.nodes.length){
+      const nodeId = params.nodes[0];
+      showDetails(nodeId);
+    }
+  });
+}
+
+/* -----------------------
+   Actions / notifications
+   ----------------------- */
+function showDetails(id){
+  const p = patients.find(x=>x.id===id);
+  if(!p) return alert('Not found');
+  const html = `<div style="margin-bottom:8px"><strong>${p.name} (${p.id})</strong></div>
+    <div class="small">Age: ${p.age||'—'} · Risk: <strong>${p.risk}%</strong> · Test: ${p.lastTest?.result||'N/A'}</div>
+    <div style="margin-top:8px"><strong>Symptoms</strong>: ${(p.symptoms||[]).join(', ')||'—'}</div>
+    <div style="margin-top:6px"><strong>Comorbidities</strong>: ${(p.comorbidities||[]).join(', ')||'—'}</div>
+    <div style="margin-top:6px"><strong>Contacts</strong>: ${(p.contacts||[]).map(c=>`${c.id} (${c.durationMin}m)`).join(', ')||'—'}</div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button onclick='notifyContact("${p.id}"); closeModal();'>Notify</button>
+      <button onclick='flagTest("${p.id}"); closeModal();'>Queue Test</button>
+    </div>`;
+  showModal(`Patient Details`, html);
+}
+
+function notifyContact(id){
+  // prototype: mark contacts notified
+  const p = patients.find(x=>x.id===id);
+  if(!p) return;
+  const contacted = (p.contacts||[]).map(c=>c.id);
+  showModal('Notify Contacts', `<div class="small">Notifications sent to: ${contacted.join(', ') || '(none)'}.</div>`);
+}
+
+function flagTest(id){
+  // prototype: mark flagged
+  showModal('Flagged', `<div class="small">Patient ${id} queued for MDR test. Lab notified.</div>`);
+}
+
+/* -----------------------
+   Modal utils
+   ----------------------- */
+function showModal(title, html){
+  const m = document.getElementById('modal');
+  document.getElementById('modalTitle').innerText = title;
+  document.getElementById('modalBody').innerHTML = typeof html === 'string' ? html : '';
+  m.style.display = 'flex';
+}
+function closeModal(){ document.getElementById('modal').style.display='none'; }
+
+/* -----------------------
+   Exports: CSV, PDF, PNG (network)
+   ----------------------- */
+function exportCSV(){
+  // columns: id,name,age,risk,test,symptoms,comorbidities,contacts
+  const rows = [["id","name","age","risk","test","symptoms","comorbidities","contacts"]];
+  for(const p of patients){
+    rows.push([
+      p.id, p.name, p.age||'', p.risk||'', p.lastTest?.result||'',
+      `"${(p.symptoms||[]).join(';')}"`, `"${(p.comorbidities||[]).join(';')}"`, `"${(p.contacts||[]).map(c=>c.id+':' + (c.durationMin||'' )).join(';')}"`
+    ]);
+  }
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'mdr_report.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportPDF(){
+  // capture main area
+  const main = document.querySelector('main');
+  const canvas = await html2canvas(main, {scale:1.5, useCORS:true});
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({orientation:'landscape', unit:'px', format:[canvas.width, canvas.height]});
+  pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+  pdf.save('mdr_dashboard.pdf');
+}
+
+function exportGraphPNG(){
+  html2canvas(document.getElementById('network')).then(canvas=>{
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'network.png';
+    a.click();
+  });
+}
+
+/* -----------------------
+   Charts (Chart.js)
+   ----------------------- */
+let pieChart=null, barChart=null;
+function renderCharts(){
+  const low = patients.filter(p=>p.risk<40).length;
+  const med = patients.filter(p=>p.risk>=40 && p.risk<70).length;
+  const high = patients.filter(p=>p.risk>=70).length;
+
+  // pie
+  const ctxPie = document.getElementById('pieRisk').getContext('2d');
+  if(pieChart) pieChart.destroy();
+  pieChart = new Chart(ctxPie, {
+    type:'pie',
+    data:{labels:['Low','Moderate','High'], datasets:[{data:[low,med,high], backgroundColor:['#93c5fd','#fbbf24','#f87171']}]},
+    options:{plugins:{legend:{position:'bottom'}}}
+  });
+
+  // bar (counts)
+  const ctxBar = document.getElementById('barRisk').getContext('2d');
+  if(barChart) barChart.destroy();
+  barChart = new Chart(ctxBar, {
+    type:'bar',
+    data:{labels:['Low','Moderate','High'], datasets:[{label:'Patients', data:[low,med,high]}]},
+    options:{scales:{y:{beginAtZero:true, ticks:{precision:0}}}, plugins:{legend:{display:false}}}
+  });
+}
+
+/* -----------------------
+   Utilities & helpers
+   ----------------------- */
+function showModalText(title, text){ showModal(title, `<div class="small">${text}</div>`); }
+
+/* -----------------------
+   Quick actions used in prototype
+   ----------------------- */
+function notifyAll(){
+  const positives = patients.filter(p=>p.lastTest && p.lastTest.result==='positive').map(p=>p.name);
+  showModal('Notify', `<div class="small">Notified contacts of positive cases: ${positives.join(', ') || 'none'}.</div>`);
+}
+
+function queueHighRisk(){
+  const list = patients.filter(p=>p.risk>=70).map(p=>p.id);
+  showModal('Queue', `<div class="small">Queued patients for MDR panel: ${list.join(', ') || '(none)'}</div>`);
+}
+
+/* -----------------------
+   Init on load
+   ----------------------- */
+runScan(); // compute and render everything when page loads
+window.addEventListener('resize', ()=>{ if(network) network.redraw(); });
+
+</script>
+
+</body>
+</html>
