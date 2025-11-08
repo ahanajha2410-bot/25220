@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Safety & Maintenance Prototype</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #007bff; /* Bright Accent Blue */
+            --background-color: #1a1a2e; /* Deep Charcoal Blue/Dark Mode */
+            --card-color: #2c2c4b;
+            --sidebar-color: #11111f;
+            --text-color: #ffffff;
+            --secondary-text: #b0b0d0;
+            --alert-color: #ffc107; /* Orange for Warning */
+            --status-ok: #28a745; /* Green for OK */
+            --error-color: #ff4757;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            min-height: 100vh;
+        }
+        
+        /* --- General Layout & Login --- */
+        .page-container { display: flex; min-height: 100vh; }
+        .main-content { flex-grow: 1; padding: 20px 40px; }
+        #login-view { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            width: 100%; 
+            height: 100vh; 
+        }
+        .login-container {
+            background-color: var(--card-color); 
+            padding: 40px 30px; 
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); 
+            width: 100%; 
+            max-width: 400px;
+            text-align: center; 
+            border-top: 5px solid var(--primary-color);
+        }
+        .highlight { color: var(--primary-color); }
+        .role-selector { display: flex; justify-content: space-between; margin-bottom: 25px; gap: 10px; } 
+        .role-selector input[type="radio"] { display: none; }
+        .role-selector label { 
+            flex-grow: 1; 
+            padding: 10px 15px; 
+            cursor: pointer; 
+            border-radius: 6px; 
+            color: var(--secondary-text); 
+            text-align: center; 
+            font-size: 0.9em;
+            border: 1px solid #444; 
+            transition: all 0.2s;
+        }
+        .role-selector input[type="radio"]:checked + label { 
+            background-color: var(--primary-color); 
+            color: var(--text-color); 
+            border-color: var(--primary-color);
+        }
+        
+        .input-group { text-align: left; margin-bottom: 20px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        
+        input[type="email"], input[type="password"], input[type="text"], input[type="number"], textarea, select {
+            width: 100%; 
+            padding: 12px; 
+            background-color: var(--background-color); 
+            border: 1px solid #444;
+            border-radius: 6px; 
+            color: var(--text-color); 
+            box-sizing: border-box;
+        }
+        .login-button {
+            width: 100%; 
+            padding: 12px; 
+            background-color: var(--primary-color); 
+            border: none;
+            border-radius: 6px; 
+            color: var(--text-color); 
+            font-size: 1.1em; 
+            font-weight: 700;
+            cursor: pointer; 
+            margin-top: 10px; 
+            transition: background-color 0.3s;
+        }
+        .login-button:hover { background-color: #0056b3; }
+        .error-message { color: var(--error-color); margin-top: 15px; min-height: 18px; font-size: 0.9em; }
+        .chatbot-placeholder {
+            margin-top: 25px;
+            color: var(--secondary-text);
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: color 0.2s;
+        }
+        .chatbot-placeholder:hover {
+            color: var(--primary-color);
+        }
+
+        /* --- DASHBOARD Styles --- */
+        .sidebar { width: 250px; background-color: var(--sidebar-color); padding: 20px; display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0, 0, 0, 0.5); }
+        .logo { color: var(--primary-color); font-size: 1.8em; margin-bottom: 30px; text-align: center; font-weight: 700;}
+        .sidebar nav a { color: var(--secondary-text); text-decoration: none; padding: 15px 10px; margin-bottom: 5px; display: block; border-radius: 8px; transition: background-color 0.3s; }
+        .sidebar nav a i { margin-right: 10px; width: 20px; text-align: center;}
+        .sidebar nav a:hover, .sidebar nav a.active { background-color: #3e3e68; color: var(--text-color); font-weight: 700; }
+        .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid #3e3e68; margin-bottom: 30px; }
+        .status-ok { color: var(--status-ok); font-weight: 700;}
+        .status-expired { color: var(--error-color); font-weight: 700;}
+        .card { background-color: var(--card-color); padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3); margin-bottom: 20px; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+        .quick-link { text-align: center; cursor: pointer; transition: transform 0.2s, background-color 0.3s;}
+        .quick-link:hover { transform: translateY(-5px); background-color: #3e3e68; }
+        .quick-link i { font-size: 2.5em; color: var(--primary-color); margin-bottom: 10px; }
+        .status-alert { color: var(--alert-color); font-weight: 700; }
+        
+        .low-stock { background-color: #3e2025; color: var(--error-color); font-weight: 700; }
+        .reorder-point { background-color: #3e3620; color: var(--alert-color); font-weight: 700; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
+        table th, table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #3e3e68; }
+        table th { background-color: #3e3e68; color: var(--primary-color); }
+        .graph-placeholder { height: 150px; background-color: #3e3e68; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: center; align-items: center; font-size: 1.0em; color: var(--secondary-text); border: 1px dashed #5c5c8e; }
+        
+        /* Safety Check Specific Styles */
+        .test-section { display: flex; gap: 20px; margin-top: 20px; }
+        .reflex-box, .detection-box { flex: 1; padding: 20px; border: 1px solid #3e3e68; border-radius: 10px; }
+        .stimulus-display { 
+            height: 50px; background-color: var(--background-color); border: 2px dashed #444; 
+            display: flex; justify-content: center; align-items: center; margin-bottom: 15px;
+            font-size: 1.5em; color: var(--alert-color); font-weight: 700;
+        }
+        .stimulus-active { background-color: var(--error-color); color: var(--text-color); }
+        .detection-icon { font-size: 4em; color: var(--secondary-text); margin-bottom: 15px; }
+
+        /* --- Chatbot Styles --- */
+        .chatbot-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: var(--text-color);
+            border: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            font-size: 1.5em;
+            z-index: 1000;
+            transition: background-color 0.3s;
+        }
+        .chatbot-btn:hover { background-color: #0056b3; }
+
+        .chatbot-window {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 350px;
+            height: 450px;
+            background-color: var(--card-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+            border: 1px solid var(--primary-color);
+        }
+        .chat-header {
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background-color: var(--background-color);
+        }
+        .message-bubble {
+            padding: 10px;
+            border-radius: 15px;
+            max-width: 80%;
+            font-size: 0.9em;
+        }
+        .user-message {
+            align-self: flex-end;
+            background-color: #3e3e68;
+            color: var(--text-color);
+            border-bottom-right-radius: 2px;
+        }
+        .assist-message {
+            align-self: flex-start;
+            background-color: #4e4e70;
+            color: var(--text-color);
+            border-bottom-left-radius: 2px;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #444;
+        }
+        .chat-input input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            margin-right: 10px;
+            background-color: var(--card-color);
+            color: var(--text-color);
+        }
+        .chat-input button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <main id="login-view">
+        <div class="login-container">
+            <header>
+                <h1><span class="highlight">V</span>ehicle <span class="highlight">S</span>afety</h1>
+                <p>Access your dashboard</p>
+            </header>
+
+            <form id="loginForm">
+                <div class="role-selector">
+                    <input type="radio" id="customer" name="role" value="customer" checked>
+                    <label for="customer"><i class="fas fa-user"></i> Customer/User</label>
+                    
+                    <input type="radio" id="company" name="role" value="company">
+                    <label for="company"><i class="fas fa-building"></i> Company/Shop</label>
+                </div>
+
+                <div class="input-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required placeholder="Enter any email address">
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required placeholder="Enter any password">
+                </div>
+
+                <button type="submit" class="login-button">LOG IN</button>
+                <p class="error-message" id="errorMessage"></p>
+            </form>
+
+            <div class="chatbot-placeholder" onclick="toggleChatbot()">
+                🤖 Need Help? Chat with V-Assist
+            </div>
+        </div>
+    </main>
+
+    <main id="customer-view" class="page-container" style="display: none;">
+        <div class="sidebar">
+            <div class="logo">V-Dashboard</div>
+            <nav id="customer-nav">
+                <a href="#" class="active" onclick="loadCustomerContent('snapshot', this)"><i class="fas fa-car-side"></i> My Vehicle</a>
+                <a href="#" onclick="loadCustomerContent('history', this)"><i class="fas fa-history"></i> Service History</a>
+                <a href="#" onclick="loadCustomerContent('warranty', this)"><i class="fas fa-shield-alt"></i> Warranty Status</a>
+                <a href="#" onclick="loadCustomerContent('safety', this)"><i class="fas fa-heartbeat"></i> Safety Check</a>
+                <a href="#" onclick="loadCustomerContent('shop', this)"><i class="fas fa-shopping-cart"></i> Parts Shop</a>
+            </nav>
+            <a href="#" class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+
+        <div class="main-content">
+            <header class="dashboard-header">
+                <h2 id="customer-greeting"></h2>
+                <div class="user-info">
+                    <p>Vehicle: <strong id="customer-vehicle-info"></strong></p>
+                </div>
+            </header>
+
+            <section id="customer-content-area">
+                </section>
+        </div>
+    </main>
+
+    <main id="company-view" class="page-container" style="display: none;">
+        <div class="sidebar">
+            <div class="logo">Shop Connect</div>
+            <nav id="company-nav">
+                <a href="#" class="active" onclick="loadCompanyContent('overview', this)"><i class="fas fa-tachometer-alt"></i> Overview</a>
+                <a href="#" onclick="loadCompanyContent('orders', this)"><i class="fas fa-file-invoice"></i> Service Orders</a>
+                <a href="#" onclick="loadCompanyContent('inventory', this)"><i class="fas fa-warehouse"></i> Inventory/Parts</a>
+                <a href="#" onclick="loadCompanyContent('lookup', this)"><i class="fas fa-users"></i> Customer Lookup</a>
+                <a href="#" onclick="loadCompanyContent('analytics', this)"><i class="fas fa-chart-line"></i> Analytics/Graphs</a>
+            </nav>
+            <a href="#" class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+        </div>
+        <div class="main-content">
+            <header class="dashboard-header">
+                <h2 id="company-greeting"></h2>
+            </header>
+            <section id="company-content-area">
+                </section>
+        </div>
+    </main>
+
+    <button class="chatbot-btn" onclick="toggleChatbot()">
+        <i class="fas fa-comment-dots"></i>
+    </button>
+    <div id="chatbot-window" class="chatbot-window" style="display: none;">
+        <div class="chat-header">
+            <span>V-Assist 🤖</span>
+            <span style="cursor: pointer;" onclick="toggleChatbot()"><i class="fas fa-times"></i></span>
+        </div>
+        <div id="chat-messages" class="chat-messages">
+            <div class="message-bubble assist-message">Hello! I'm V-Assist. How can I help you today?</div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="chat-input-field" placeholder="Type your message...">
+            <button id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+        </div>
+    </div>
+    
+    <script>
+        // --- SIMULATED BACKEND DATABASE (JS Objects) ---
+        // NOTE: These are used to populate the dashboard content, not for authentication anymore.
+        const DB = {
+            USERS: [
+                { 
+                    id: 'U491', 
+                    email: 'jane.doe@example.com', 
+                    password: 'customerpass', 
+                    role: 'customer', 
+                    name: 'Jane Doe',
+                    phone: '555-123-4567',
+                    primaryVehicleVIN: '4T1B_CAMRY_001'
+                },
+                { 
+                    id: 'C101', 
+                    email: 'admin@shopconnect.com', 
+                    password: 'companypass', 
+                    role: 'company', 
+                    name: 'Company Admin'
+                }
+            ],
+            VEHICLES: [
+                { 
+                    vin: '4T1B_CAMRY_001', 
+                    model: 'Toyota Camry', 
+                    ownerId: 'U491',
+                    mileage: 45120,
+                    lastServiceDate: '2025-10-15',
+                    nextServiceMileage: 48000,
+                    status: 'OK'
+                },
+                 {
+                    vin: '6F3P_FOCUS_002',
+                    model: 'Ford Focus',
+                    ownerId: 'U492', 
+                    mileage: 80500,
+                    status: 'CHECK ENGINE'
+                }
+            ],
+            WARRANTIES: [
+                { vin: '4T1B_CAMRY_001', part: 'Engine Assembly', serial: 'ENG9923...', installDate: '2023-01-01', expiryDate: '2030-01-01', type: 'Long-Term' },
+                { vin: '4T1B_CAMRY_001', part: 'Tire Set (Current)', serial: '2309X-Tire', installDate: '2023-12-01', expiryDate: '2025-12-01', type: 'Limited' }, // Expiring soon
+                { vin: '4T1B_CAMRY_001', part: 'Starter Motor', serial: 'STM455...', installDate: '2024-06-15', expiryDate: '2027-06-15', type: 'Standard' }
+            ],
+            INVENTORY: [
+                { sku: 'OFX-459', name: 'Oil Filter (Model X)', stock: 5, reorderPoint: 10, cost: 8.50 },
+                { sku: 'BPS-220', name: 'Brake Pads (Standard)', stock: 15, reorderPoint: 20, cost: 45.00 },
+                { sku: 'SP4-112', name: 'Spark Plugs (4-Pack)', stock: 78, reorderPoint: 50, cost: 12.00 }
+            ],
+            SERVICE_RECORDS: [
+                { vin: '4T1B_CAMRY_001', date: '2025-10-15', mileage: 45120, description: 'Oil Change, Fluid Top-Up, Filter Replacement', shop: 'Apex Auto Service', cost: 125.00 },
+                { vin: '4T1B_CAMRY_001', date: '2025-04-01', mileage: 30500, description: 'Brake Rotor & Pad Replacement (Front Axle)', shop: 'Pro-Care Garage', cost: 410.50 },
+                { vin: '4T1B_CAMRY_001', date: '2024-11-20', mileage: 15010, description: 'Tire Rotation and Alignment Check', shop: 'Apex Auto Service', cost: 65.00 },
+                { vin: '4T1B_CAMRY_001', date: '2024-05-05', mileage: 5000, description: 'New Battery Installation (Warranty Claim)', shop: 'Power Battery Co.', cost: 0.00 },
+            ]
+        };
+
+        // Global variables to hold active user/vehicle data
+        let activeUser = null;
+        let activeVehicle = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                simulateLogin();
+            });
+            document.getElementById('login-view').style.display = 'flex';
+        });
+
+        // --- MODIFIED LOGIN FUNCTION ---
+        function simulateLogin() {
+            const email = document.getElementById('email').value.trim();
+            const roleElement = document.querySelector('input[name="role"]:checked');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            errorMessage.textContent = 'Authenticating...';
+
+            if (!roleElement) {
+                 errorMessage.textContent = 'Please select a role.';
+                 return;
+            }
+
+            const role = roleElement.value;
+            
+            // Bypass credential check. Create a mock user based on the selected role.
+            setTimeout(() => {
+                if (role === 'customer') {
+                    // Use the mock customer data
+                    activeUser = DB.USERS.find(u => u.role === 'customer');
+                    // Update mock user name with entered email (optional flavor)
+                    const mockName = email.split('@')[0];
+                    activeUser.name = mockName.charAt(0).toUpperCase() + mockName.slice(1);
+                } else if (role === 'company') {
+                    // Use the mock company admin data
+                    activeUser = DB.USERS.find(u => u.role === 'company');
+                }
+                
+                errorMessage.textContent = '';
+                redirectUser(role);
+
+            }, 500); // Shorter simulated delay
+        }
+
+        function redirectUser(role) {
+            document.getElementById('login-view').style.display = 'none';
+
+            document.getElementById('customer-view').style.display = 'none';
+            document.getElementById('company-view').style.display = 'none';
+
+            if (role === 'customer') {
+                activeVehicle = DB.VEHICLES.find(v => v.ownerId === activeUser.id);
+
+                document.getElementById('customer-view').style.display = 'flex';
+                document.getElementById('customer-greeting').textContent = `Welcome Back, ${activeUser.name.split(' ')[0]}!`;
+                
+                if (activeVehicle) {
+                    document.getElementById('customer-vehicle-info').textContent = `${activeVehicle.model} (VIN: ${activeVehicle.vin.substring(0, 4)}...)`;
+                }
+                
+                loadCustomerContent('snapshot', document.querySelector('#customer-nav a'));
+            } else if (role === 'company') {
+                document.getElementById('company-view').style.display = 'flex';
+                document.getElementById('company-greeting').textContent = `Welcome, ${activeUser.name}!`;
+                loadCompanyContent('overview', document.querySelector('#company-nav a'));
+            }
+        }
+
+        function logout() {
+            activeUser = null;
+            activeVehicle = null;
+            document.getElementById('customer-view').style.display = 'none';
+            document.getElementById('company-view').style.display = 'none';
+            
+            document.getElementById('login-view').style.display = 'flex';
+            document.getElementById('errorMessage').textContent = 'You have logged out.';
+        }
+        
+        // --- External Link Functions (Retained) ---
+        function openGoogleMapSearch(query) {
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+            window.open(mapsUrl, '_blank');
+        }
+
+        function openGoogleMapDirections(origin, destination) {
+            const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+            window.open(mapsUrl, '_blank');
+        }
+
+        // ===================================
+        // CUSTOMER DASHBOARD LOGIC (Retained)
+        // ===================================
+
+        function loadCustomerContent(section, element) {
+            const contentArea = document.getElementById('customer-content-area');
+            let contentHTML = ''; 
+            document.querySelectorAll('#customer-nav a').forEach(a => a.classList.remove('active'));
+            if (element) {
+                element.classList.add('active');
+            }
+
+            const vehicle = activeVehicle;
+            const vin = vehicle ? vehicle.vin : 'N/A';
+
+            if (!vehicle && section !== 'shop') {
+                 contentArea.innerHTML = `<div class="card"><p class="status-alert">No primary vehicle found for this user. Please contact support.</p></div>`;
+                 return;
+            }
+
+            if (section === 'snapshot') {
+                const statusClass = vehicle.status === 'OK' ? 'status-ok' : 'status-alert';
+                const statusText = vehicle.status === 'OK' ? 'All Systems Go' : 'Minor Alert';
+                
+                contentHTML = `
+                    <div id="snapshot-content">
+                        <h3>My Vehicle Snapshot </h3>
+                        <div class="card vehicle-card">
+                            <div class="vehicle-details">
+                                <h4>${vehicle.model} (VIN: ${vin.substring(0, 4)}...) - Current Status: <span class="${statusClass}">${statusText}</span></h4>
+                                <p>Mileage: <strong>${vehicle.mileage.toLocaleString()} km</strong></p>
+                                <p>Last Service: <strong>${vehicle.lastServiceDate}</strong></p>
+                                <p>Next Service Due: <strong>${vehicle.nextServiceMileage.toLocaleString()} km</strong></p>
+                            </div>
+                        </div>
+
+                        <div class="card-grid">
+                            <div class="card quick-link safety-alert" onclick="loadCustomerContent('safety', document.querySelector('#customer-nav a[onclick*=\"safety\"]'))">
+                                <i class="fas fa-camera"></i>
+                                <h4>Pre-Drive Safety</h4>
+                                <p class="status-alert">Warning: Run Safety Check!</p>
+                            </div>
+                            <div class="card quick-link warranty-status" onclick="loadCustomerContent('warranty', document.querySelector('#customer-nav a[onclick*=\"warranty\"]'))">
+                                <i class="fas fa-clipboard-check"></i>
+                                <h4>Warranty Status</h4>
+                                <p class="status-alert">1 Warranty Expiring Soon!</p>
+                            </div>
+                            <div class="card quick-link service-finder" onclick="openGoogleMapSearch('nearby private service centers')">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <h4>Find Service <span class="highlight">(Open Map)</span></h4>
+                                <p>Nearby Centers</p>
+                            </div>
+                            <div class="card quick-link" onclick="loadCustomerContent('cart', document.querySelector('#customer-nav a[onclick*=\"shop\"]'))">
+                                <i class="fas fa-shopping-cart"></i>
+                                <h4>My Cart</h4>
+                                <p>3 Items Ready</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (section === 'history') {
+                const records = DB.SERVICE_RECORDS.filter(r => r.vin === vin).sort((a, b) => new Date(b.date) - new Date(a.date));
+                let tableRows = records.map(r => `
+                    <tr>
+                        <td>${r.date}</td>
+                        <td>${r.mileage.toLocaleString()} km</td>
+                        <td>${r.description}</td>
+                        <td>${r.shop}</td>
+                        <td>$${r.cost.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+
+                contentHTML = `
+                    <div class="card">
+                        <h3>Service History Ledger for ${vehicle.model}</h3>
+                        <p>A chronological log of all repairs and services performed.</p>
+                        <table width="100%" style="color: var(--text-color);">
+                            <thead><tr><th>Date</th><th>Mileage</th><th>Service Performed</th><th>Shop</th><th>Cost</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (section === 'warranty') {
+                const warranties = DB.WARRANTIES.filter(w => w.vin === vin);
+                const today = new Date();
+                let tableRows = warranties.map(w => {
+                    const expiry = new Date(w.expiryDate);
+                    const isExpired = expiry < today;
+                    const monthsRemaining = isExpired ? 0 : Math.round((expiry - today) / (1000 * 60 * 60 * 24 * 30.44));
+                    const statusClass = isExpired ? 'status-expired' : (monthsRemaining <= 24 ? 'status-alert' : 'status-ok');
+                    const statusText = isExpired ? 'EXPIRED' : (monthsRemaining <= 2 ? `Expiring Soon (${monthsRemaining} Months)` : 'Active');
+
+                    return `
+                        <tr>
+                            <td>${w.part}</td>
+                            <td>${w.serial.substring(0, 8)}...</td>
+                            <td>${w.installDate}</td>
+                            <td class="${statusClass}">${w.expiryDate}</td>
+                            <td><span class="${statusClass}">${statusText}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+
+                contentHTML = `
+                    <div class="card">
+                        <h3>Active Warranty Status for ${vehicle.model}</h3>
+                        <p>Track the remaining time and mileage on your warrantied parts.</p>
+                        <table width="100%" style="color: var(--text-color);">
+                            <thead><tr><th>Part</th><th>Serial No.</th><th>Install Date</th><th>Expiration Date</th><th>Status</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            else if (section === 'safety') {
+                 contentHTML = `
+                    <h3><i class="fas fa-heartbeat"></i> Pre-Drive Safety Module</h3>
+                    <p>Complete both tests to ensure you are fully alert and ready to drive.</p>
+                    <div class="test-section">
+                        <div class="card reflex-box">
+                            <h4>1. Reaction Time Test</h4>
+                            <p id="reflex-instructions">Tap 'Start Test' when the box turns red.</p>
+                            <div id="stimulus-display" class="stimulus-display"></div>
+                            <button id="reflex-button" class="login-button" style="width: 200px; background-color: #28a745;" onclick="startReflexTest()">START TEST</button>
+                            <p id="reflex-result"></p>
+                        </div>
+
+                        <div class="card detection-box">
+                            <h4>2. Drowsiness & Distraction Check</h4>
+                            <p id="detection-instructions">Hold your phone/tablet steady and look at the camera for 5 seconds.</p>
+                            <i id="detection-icon" class="fas fa-user-circle detection-icon"></i>
+                            <button id="detection-button" class="login-button" style="width: 200px; background-color: #007bff;" onclick="startFaceDetection()">START DETECTION</button>
+                            <p id="detection-result"></p>
+                        </div>
+                    </div>
+                `;
+            } else if (section === 'shop') {
+                contentHTML = `
+                    <div class="card"><h3>Parts Shopping Portal</h3><p>Find and order recommended parts for your vehicle model.</p></div>
+                    <div class="card">
+                        <h4>Sample Parts Listings</h4>
+                        <p>Cabin Air Filter: $15.99 <button onclick="alert('Added Cabin Air Filter to cart!')" class="login-button" style="width: auto; padding: 5px 10px; margin: 5px 0;">Add to Cart</button></p>
+                        <p>Premium Wiper Blades: $29.50 <button onclick="alert('Added Wiper Blades to cart!')" class="login-button" style="width: auto; padding: 5px 10px; margin: 5px 0; background-color: #8c2a2a;">Add to Cart</button></p>
+                    </div>
+                `;
+            } else if (section === 'cart') {
+                contentHTML = `<div class="card"><h3>Shopping Cart (3 Items)</h3><p>Review items and proceed to checkout. Total: $125.49</p><button class="login-button" style="width: 200px;">Proceed to Checkout</button></div>`;
+            }
+
+            contentArea.innerHTML = contentHTML;
+        }
+
+        // ===================================
+        // COMPANY DASHBOARD LOGIC (Retained)
+        // ===================================
+        
+        function loadCompanyContent(section, element) {
+            const contentArea = document.getElementById('company-content-area');
+            let contentHTML = ''; 
+            
+            document.querySelectorAll('#company-nav a').forEach(a => a.classList.remove('active'));
+            if (element) {
+                element.classList.add('active');
+            }
+            
+            if (section === 'overview') {
+                contentHTML = `
+                    <div class="card"><h3>Service Center Management Overview</h3><p>KPIs: <strong>30</strong> Active Orders, **95%** Customer Satisfaction, **4.8** Avg Rating.</p></div>
+                    <div class="card-grid">
+                        <div class="card quick-link" onclick="loadCompanyContent('orders', document.querySelector('#company-nav a[onclick*=\"orders\"]'))"><i class="fas fa-list-alt"></i><h4>Service Queue</h4><p class="status-alert">7 Incoming Requests</p></div>
+                        <div class="card quick-link" onclick="loadCompanyContent('inventory', document.querySelector('#company-nav a[onclick*=\"inventory\"]'))"><i class="fas fa-warehouse"></i><h4>Inventory/Shop</h4><p>Manage Stock & Supplier Orders</p></div>
+                        <div class="card quick-link" onclick="loadCompanyContent('analytics', document.querySelector('#company-nav a[onclick*=\"analytics\"]'))"><i class="fas fa-chart-line"></i><h4>Performance</h4><p>View Graphs</p></div>
+                        <div class="card quick-link" onclick="openGoogleMapSearch('nearby service centers near our location')"><i class="fas fa-map-marker-alt"></i><h4>View Map</h4><p>Nearby Shops/Competitors</p></div>
+                    </div>
+                `;
+            } else if (section === 'orders') {
+                contentHTML = `
+                    <div class="card">
+                        <h3>Active Service Orders Queue</h3>
+                        <p>Use the map link to visualize technician routes for parts pickup or vehicle delivery.</p>
+                        <table width="100%" style="color: var(--text-color);">
+                            <thead><tr><th>ID</th><th>Customer</th><th>Status</th><th>Map Route</th></tr></thead>
+                            <tbody>
+                                <tr><td>#00124</td><td>Alice R.</td><td><span class="status-alert">Awaiting Parts</span></td><td><button onclick="openGoogleMapDirections('Shop Address', 'Parts Warehouse')" class="login-button" style="width: auto; padding: 5px 10px;">Map Delivery</button></td></tr>
+                                <tr><td>#00125</td><td>Bob M.</td><td><span class="status-ok">In Progress</span></td><td><button onclick="openGoogleMapDirections('Shop Address', 'Bob M. Home')" class="login-button" style="width: auto; padding: 5px 10px; background-color: #8c2a2a;">Map Pickup</button></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (section === 'inventory') {
+                const inventory = DB.INVENTORY;
+                let tableRows = inventory.map(i => {
+                    const isLowStock = i.stock < i.reorderPoint / 2;
+                    const isReorder = i.stock < i.reorderPoint && i.stock >= i.reorderPoint / 2;
+                    const rowClass = isLowStock ? 'low-stock' : (isReorder ? 'reorder-point' : '');
+                    const statusText = isLowStock ? '**CRITICAL**' : (isReorder ? '**Low Stock**' : 'OK');
+
+                    return `
+                        <tr class="${rowClass}">
+                            <td>${i.name}</td>
+                            <td>${i.sku}</td>
+                            <td>${i.stock}</td>
+                            <td>${i.reorderPoint}</td>
+                            <td>${statusText}</td>
+                            <td>
+                                <button onclick="alert('Creating supplier order for ${i.sku}')" class="login-button" style="width: auto; padding: 5px 10px;">Reorder</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                contentHTML = `
+                    <div class="card">
+                        <h3><i class="fas fa-warehouse"></i> Parts Inventory Management</h3>
+                        <p>Manage stock levels, reorder points, and supplier logistics.</p>
+                        <div class="search-bar">
+                            <input type="text" placeholder="Search by Part Name, SKU, or Supplier...">
+                            <button class="login-button" style="width: 150px;">Search</button>
+                        </div>
+
+                        <h4>Stock Alerts</h4>
+                        <table width="100%" style="color: var(--text-color);">
+                            <thead><tr><th>Part Name</th><th>SKU</th><th>Stock</th><th>Reorder Point</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+
+                        <div class="data-point" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><i class="fas fa-truck-loading"></i> **Pending Supplier Orders:** 3</div>
+                            <button onclick="alert('Viewing Company Cart/Pending Supplier Orders.')" class="login-button" style="width: 150px; padding: 8px;">View Cart</button>
+                        </div>
+                        
+                        <p style="text-align: center; margin-top: 20px;"></p>
+                    </div>
+                `;
+            } else if (section === 'lookup') {
+                const customer = DB.USERS.find(u => u.id === 'U491');
+                const customerVehicle = DB.VEHICLES.find(v => v.ownerId === 'U491');
+                
+                contentHTML = `
+                    <div class="card">
+                        <h3><i class="fas fa-users"></i> Customer & Vehicle Lookup</h3>
+                        <p>Search by VIN, license plate, phone number, or customer name.</p>
+                        <div class="search-bar">
+                            <input type="text" placeholder="Enter VIN or Customer Name...">
+                            <button class="login-button" style="width: 150px;">Search</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card" id="customer-result">
+                        <div class="profile-header">
+                            <i class="fas fa-user-circle profile-icon"></i>
+                            <div>
+                                <h4>Customer Result: ${customer.name} (ID: ${customer.id})</h4>
+                                <p>Primary Vehicle: **${customerVehicle.model}** (VIN: ${customerVehicle.vin.substring(0, 4)}...)</p>
+                            </div>
+                        </div>
+                        
+                        <div class="card-grid">
+                            <div class="data-point"><i class="fas fa-phone"></i> **Phone:** ${customer.phone}</div>
+                            <div class="data-point"><i class="fas fa-envelope"></i> **Email:** ${customer.email}</div>
+                            <div class="data-point"><i class="fas fa-star"></i> **Satisfaction Rating:** 5.0</div>
+                            <div class="data-point"><i class="fas fa-calendar-check"></i> **Last Visit:** ${customerVehicle.lastServiceDate}</div>
+                        </div>
+
+                        <h4 style="margin-top: 15px;">Quick Actions</h4>
+                        <div class="card-grid">
+                            <button onclick="alert('Simulating load history for ${customer.name}')" class="login-button" style="width: 100%; padding: 8px;">View Full Service History</button>
+                            <button onclick="alert('Simulating check warranties for ${customer.name}')" class="login-button" style="width: 100%; padding: 8px; background-color: #8c2a2a;">Check Active Warranties</button>
+                        </div>
+                        
+                        <p style="text-align: center; margin-top: 20px;"></p>
+                    </div>
+                `;
+            } else if (section === 'analytics') {
+                contentHTML = `
+                    <div class="card">
+                        <h3>Business Analytics & Graphs</h3>
+                        <p>Review graphical data on revenue, services, and customer retention over the last six months.</p>
+                        
+                        <h4>Monthly Revenue Trend (K$)</h4>
+                        <div class="graph-placeholder">
+                            [Placeholder: Bar Chart showing Monthly Revenue, e.g., 20, 25, 22, 28, 30, 35]
+                        </div>
+                        
+                        <h4>Service Orders Count</h4>
+                        <div class="graph-placeholder">
+                            [Placeholder: Line Graph showing Service Orders per Month, e.g., 120, 150, 135, 170, 180, 210]
+                        </div>
+
+                        <p style="margin-top: 15px;">*These charts would use a JavaScript charting library (e.g., Chart.js or D3.js) to render live data.</p>
+                    </div>
+                `;
+            }
+
+            contentArea.innerHTML = contentHTML;
+        }
+
+        // ===================================
+        // SAFETY CHECK LOGIC (Retained)
+        // ===================================
+        let startTime; 
+        let timeoutID; 
+        let isWaitingForStimulus = false;
+
+        function resetReflexTest() {
+            const button = document.getElementById('reflex-button');
+            const instructions = document.getElementById('reflex-instructions');
+            const display = document.getElementById('stimulus-display');
+            
+            display.textContent = ''; 
+            display.classList.remove('stimulus-active');
+            button.textContent = 'START TEST'; 
+            button.disabled = false; 
+            isWaitingForStimulus = false;
+            button.style.backgroundColor = 'var(--status-ok)';
+            button.onclick = startReflexTest;
+            instructions.textContent = 'Tap \'Start Test\' when the box turns red.';
+        }
+
+        function startReflexTest() {
+            const instructions = document.getElementById('reflex-instructions');
+            const display = document.getElementById('stimulus-display');
+            const button = document.getElementById('reflex-button');
+            const result = document.getElementById('reflex-result');
+
+            result.textContent = ''; 
+            display.textContent = '...'; 
+            display.classList.remove('stimulus-active');
+            button.textContent = 'WAIT...'; 
+            button.disabled = true; 
+            button.style.backgroundColor = 'var(--alert-color)';
+            isWaitingForStimulus = true;
+
+            const randomDelay = Math.random() * 3000 + 2000; 
+
+            timeoutID = setTimeout(() => {
+                display.textContent = 'TAP NOW!'; 
+                display.classList.add('stimulus-active');
+                button.textContent = 'TAP!'; 
+                button.disabled = false; 
+                button.style.backgroundColor = 'var(--error-color)';
+                isWaitingForStimulus = false;
+                startTime = Date.now();
+            }, randomDelay);
+            
+            button.onclick = function() {
+                if (isWaitingForStimulus) {
+                    clearTimeout(timeoutID); 
+                    result.innerHTML = '<span style="color:var(--error-color); font-weight:700;">🚨 TOO EARLY!</span> You tapped before the signal. Stay focused.';
+                    resetReflexTest(); 
+                    return;
+                }
+                calculateReflexTime();
+            }
+        }
+
+        function calculateReflexTime() {
+            const endTime = Date.now();
+            const timeTaken = (endTime - startTime) / 1000;
+            let feedback = '';
+            let color = '';
+
+            if (timeTaken < 0.3) { feedback = 'Excellent!'; color = 'var(--status-ok)'; }
+            else if (timeTaken < 0.5) { feedback = 'Good.'; color = 'var(--alert-color)'; }
+            else if (timeTaken < 0.8) { feedback = 'Needs Improvement.'; color = 'var(--error-color)'; }
+            else { feedback = '🚨 POOR REFLEX TIME. DO NOT DRIVE!'; color = 'var(--error-color)'; }
+
+            document.getElementById('reflex-result').innerHTML = `<p style="color:${color}">Reaction Time: <strong>${timeTaken.toFixed(3)} seconds.</strong> ${feedback}</p>`;
+            resetReflexTest();
+        }
+
+        function startFaceDetection() {
+            const instructions = document.getElementById('detection-instructions');
+            const button = document.getElementById('detection-button');
+            const result = document.getElementById('detection-result');
+            const icon = document.getElementById('detection-icon');
+
+            result.textContent = '';
+            button.textContent = 'Scanning...';
+            button.disabled = true;
+            button.style.backgroundColor = 'gray';
+            icon.classList.remove('fa-user-circle');
+            icon.classList.add('fa-sync-alt', 'fa-spin');
+            
+            const outcome = Math.random(); 
+
+            setTimeout(() => {
+                icon.classList.remove('fa-sync-alt', 'fa-spin');
+                
+                if (outcome < 0.1) {
+                    icon.classList.add('fa-exclamation-triangle');
+                    result.innerHTML = '<span style="color:var(--error-color); font-weight:700;">🚨 FAILED: Drowsiness Detected.</span> Stop and Rest.';
+                    button.style.backgroundColor = 'var(--error-color)';
+                } else if (outcome < 0.3) {
+                    icon.classList.add('fa-head-side-mask');
+                    result.innerHTML = '<span style="color:var(--alert-color); font-weight:700;">⚠️ ALERT: Head Position Warning.</span> Adjust posture.';
+                    button.style.backgroundColor = 'var(--alert-color)';
+                } else {
+                    icon.classList.add('fa-check-circle');
+                    result.innerHTML = '<span style="color:var(--status-ok); font-weight:700;">✅ PASSED: Driver Alertness Confirmed.</span>';
+                    button.style.backgroundColor = 'var(--status-ok)';
+                }
+
+                button.textContent = 'TEST COMPLETE';
+                button.disabled = true;
+                
+                setTimeout(() => {
+                    button.textContent = 'START DETECTION';
+                    button.disabled = false;
+                    button.style.backgroundColor = 'var(--primary-color)';
+                    icon.className = 'fas fa-user-circle detection-icon';
+                }, 3000);
+
+            }, 2500); 
+        }
+        
+        // ===================================
+        // CHATBOT LOGIC (Retained)
+        // ===================================
+
+        function toggleChatbot() {
+            const chatWindow = document.getElementById('chatbot-window');
+            const isVisible = chatWindow.style.display === 'flex';
+            chatWindow.style.display = isVisible ? 'none' : 'flex';
+        }
+
+        function sendChatMessage() {
+            const inputField = document.getElementById('chat-input-field');
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageText = inputField.value.trim();
+
+            if (messageText === "") return;
+
+            const userBubble = document.createElement('div');
+            userBubble.classList.add('message-bubble', 'user-message');
+            userBubble.textContent = messageText;
+            messagesContainer.appendChild(userBubble);
+            
+            inputField.value = ''; 
+            
+            let assistResponse = "I'm V-Assist. Did you check the dashboard sections for your answer?";
+            
+            if (messageText.toLowerCase().includes('warranty')) {
+                assistResponse = "To check your warranty status, please navigate to the 'Warranty Status' section in the sidebar.";
+            } else if (messageText.toLowerCase().includes('service')) {
+                assistResponse = "You can schedule service or find a nearby center using the 'Find Service' link on your main dashboard.";
+            }
+
+            setTimeout(() => {
+                const assistBubble = document.createElement('div');
+                assistBubble.classList.add('message-bubble', 'assist-message');
+                assistBubble.textContent = assistResponse;
+                messagesContainer.appendChild(assistBubble);
+                
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }, 500);
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
